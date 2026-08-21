@@ -1,6 +1,6 @@
 --====================================================
--- 🌊 CIPHUB V99 | UPDATED TABS 🌊
--- STATUS: UI BASE + SETTINGS + PARTICLES + FIXED ESP & CAMERA FREEZE
+-- 🌊 CIPHUB V99 | UPDATED TABS + SAFE ANTI-BLACKLIST + REALISTIC HD DAY + GLOBAL SEARCH 🌊
+-- STATUS: UI BASE + SETTINGS + PARTICLES + ESP + SAFE BYPASS BASE + HD LIGHTING + GLOBAL SEARCH BAR
 --====================================================
 
 local Players = game:GetService("Players")
@@ -95,8 +95,10 @@ local function MakeDraggable(frame, handle)
     end)
 end
 
+local Pages = {}
+
 -- ====================================================
--- UI BUILDER UTILS
+-- UI BUILDER UTILS (GLOBAL SEARCH BAR)
 -- ====================================================
 local function CreateSection(parent, title)
     local Section = Instance.new("Frame", parent); Section.Size = UDim2.new(1, 0, 0, 30); Section.BackgroundTransparency = 1; Section.ZIndex = parent.ZIndex + 1
@@ -139,6 +141,48 @@ local function CreateButton(parent, text, callback)
     return BtnFrame
 end
 
+local function CreateSearchBar(parent)
+    local SearchFrame = Instance.new("Frame", parent)
+    SearchFrame.Size = UDim2.new(1, -10, 0, 35)
+    SearchFrame.BackgroundTransparency = 1
+    SearchFrame.ZIndex = parent.ZIndex + 1
+
+    local SearchBox = Instance.new("TextBox", SearchFrame)
+    SearchBox.Size = UDim2.new(1, 0, 1, 0)
+    SearchBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    SearchBox.TextColor3 = Theme.Text
+    SearchBox.PlaceholderText = "🔍 Cari semua fitur / script..."
+    SearchBox.PlaceholderColor3 = Theme.SubText
+    SearchBox.Text = ""
+    SearchBox.Font = Enum.Font.Gotham
+    SearchBox.TextSize = 13
+    SearchBox.ZIndex = SearchFrame.ZIndex + 1
+    Round(SearchBox, 6)
+    Instance.new("UIStroke", SearchBox).Color = Theme.Stroke
+
+    SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        local query = SearchBox.Text:lower()
+        for _, tabData in pairs(Pages) do
+            local pageContainer = tabData.Page
+            if pageContainer then
+                for _, child in pairs(pageContainer:GetChildren()) do
+                    if child ~= SearchFrame and child:IsA("Frame") then
+                        local label = child:FindFirstChildWhichIsA("TextLabel", true) or child:FindFirstChildWhichIsA("TextButton", true)
+                        if label then
+                            if query == "" or string.find(label.Text:lower(), query) then
+                                child.Visible = true
+                            else
+                                child.Visible = false
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    return SearchFrame
+end
+
 -- ====================================================
 -- GHOST MINIMIZE & RESTORE
 -- ====================================================
@@ -177,7 +221,6 @@ local LogoArea = Instance.new("Frame", Sidebar); LogoArea.Size = UDim2.new(1, 0,
 local LogoText = Instance.new("TextLabel", LogoArea); LogoText.Size = UDim2.new(1, -20, 0, 30); LogoText.Position = UDim2.new(0, 15, 0, 15); LogoText.RichText = true; LogoText.Text = 'Ciphub<font color="rgb(0, 200, 255)">V99</font>'; LogoText.Font = Enum.Font.GothamBold; LogoText.TextColor3 = Theme.Text; LogoText.TextSize = 20; LogoText.TextXAlignment = "Left"; LogoText.BackgroundTransparency = 1; LogoText.ZIndex = 4
 
 local Content = Instance.new("Frame", Main); Content.Size = UDim2.new(1, -195, 1, -40); Content.Position = UDim2.new(0, 190, 0, 40); Content.BackgroundTransparency = 1; Content.ZIndex = 2
-local Pages = {}
 
 -- AVATAR PROFILE PANEL
 local UserPanel = Instance.new("Frame", Sidebar); UserPanel.Name = "UserPanel"; UserPanel.Size = UDim2.new(1, -16, 0, 50); UserPanel.Position = UDim2.new(0, 8, 1, -60); UserPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 22); UserPanel.ZIndex = 3; Round(UserPanel, 8)
@@ -210,11 +253,14 @@ local function CreateTab(name, icon)
     local TabButton = Instance.new("TextButton", TabHolder); TabButton.Size = UDim2.new(1, -20, 0, 35); TabButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30); TabButton.BackgroundTransparency = 1; TabButton.Text = icon .. "  " .. name; TabButton.Font = Enum.Font.GothamMedium; TabButton.TextColor3 = Theme.SubText; TabButton.TextSize = 13; TabButton.ZIndex = 4; Round(TabButton, 6)
     local Page = Instance.new("ScrollingFrame", Content); Page.Size = UDim2.new(1, 0, 1, 0); Page.BackgroundTransparency = 1; Page.Visible = false; Page.ScrollBarThickness = 0; Page.ZIndex = 5
     local PageLayout = Instance.new("UIListLayout", Page); PageLayout.Padding = UDim.new(0, 10)
+    
+    Pages[name] = {Page = Page, Button = TabButton, Layout = PageLayout}
+    CreateSearchBar(Page)
+
     TabButton.MouseButton1Click:Connect(function()
         for _, v in pairs(Pages) do v.Page.Visible = false; v.Button.BackgroundTransparency = 1; v.Button.TextColor3 = Theme.SubText end
         Page.Visible = true; TabButton.BackgroundTransparency = 0.5; TabButton.TextColor3 = Theme.Accent
     end)
-    Pages[name] = {Page = Page, Button = TabButton, Layout = PageLayout}
     return Page
 end
 
@@ -240,12 +286,12 @@ MinClick.MouseButton1Click:Connect(function() Main.Visible = true; RestoreBtn.Vi
 local tabCipikMenu = CreateTab("CipikMenu", "🚪")
 local tabLt2Script  = CreateTab("Lt2 script", "🛠️")
 local tabMuscle     = CreateTab("Muscle Script", "💪")
+local tabRandom     = CreateTab("Random Script", "🎲")
 
 -- ====================================================
 -- TAB 1: CipikMenu (FEATURES INTEGRATION)
 -- ====================================================
 
--- State Variables for Features
 local CameraFreezeState = false
 local LockedCameraCF = nil
 local InfiniteZoomState = false
@@ -257,24 +303,26 @@ local JumpHeightVal = 50
 local NoclipState = false
 local InfJumpState = false
 
+local AntiBlacklistState = false
+local lockedAnchorCF = nil
+local lastBypassAttempt = 0
+local bypassCooldown = 2
+
 local EspState = false
 local EspName = false
 local EspHealth = false
 local EspDist = false
-
--- Storage for ESP Objects
 local EspCache = {}
+
+local RealisticHDState = false
+local originalLightingData = {}
 
 -- GRUP FLAME 1: CAMERA
 CreateSection(tabCipikMenu, "CAMERA")
 
 CreateToggle(tabCipikMenu, "Freeze Camera", false, function(state)
     CameraFreezeState = state
-    if state then
-        LockedCameraCF = Camera.CFrame
-    else
-        LockedCameraCF = nil
-    end
+    if state then LockedCameraCF = Camera.CFrame else LockedCameraCF = nil end
 end)
 
 CreateToggle(tabCipikMenu, "Zoom Tak Terbatas", false, function(state)
@@ -292,7 +340,6 @@ CreateToggle(tabCipikMenu, "Tools Teleport (Click to TP)", false, function(state
     ClickTpState = state
 end)
 
--- Click to TP Logic
 UIS.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and ClickTpState and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
         local mouse = LP:GetMouse()
@@ -305,8 +352,18 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- GRUP FLAME 2: PLAYER
-CreateSection(tabCipikMenu, "PLAYER")
+-- GRUP FLAME 2: PLAYER & ANTI-BLACKLIST BYPASS
+CreateSection(tabCipikMenu, "PLAYER & BYPASS BASE")
+
+CreateToggle(tabCipikMenu, "Anti-Blacklist (Base Bypass)", false, function(state)
+    AntiBlacklistState = state
+    local char = LP.Character
+    if state and char and char:FindFirstChild("HumanoidRootPart") then
+        lockedAnchorCF = char.HumanoidRootPart.CFrame
+    else
+        lockedAnchorCF = nil
+    end
+end)
 
 CreateToggle(tabCipikMenu, "Lari Cepat (WalkSpeed)", false, function(state)
     WalkSpeedState = state
@@ -343,38 +400,71 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
--- GRUP FLAME 3: WALLHACK (ESP)
+-- GRUP FLAME 3: VISUAL & ENVIRONMENT (REALISTIC HD DAY)
+CreateSection(tabCipikMenu, "VISUAL WORLD (HD)")
+
+CreateToggle(tabCipikMenu, "Siang HD & Realistis (PSHD)", false, function(state)
+    RealisticHDState = state
+    if state then
+        originalLightingData.ClockTime = Lighting.ClockTime
+        originalLightingData.Brightness = Lighting.Brightness
+        originalLightingData.OutdoorAmbient = Lighting.OutdoorAmbient
+        originalLightingData.ColorShift_Top = Lighting.ColorShift_Top
+        originalLightingData.FogEnd = Lighting.FogEnd
+        
+        Lighting.ClockTime = 14.5
+        Lighting.Brightness = 2.2
+        Lighting.OutdoorAmbient = Color3.fromRGB(130, 140, 160)
+        Lighting.ColorShift_Top = Color3.fromRGB(245, 245, 255)
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = true
+        
+        local atmos = Lighting:FindFirstChild("CipsAtmosphere")
+        if not atmos then
+            atmos = Instance.new("Atmosphere", Lighting)
+            atmos.Name = "CipsAtmosphere"
+            atmos.Density = 0.25
+            atmos.Offset = 0.2
+            atmos.Color = Color3.fromRGB(200, 220, 240)
+            atmos.Haze = 1
+            atmos.Glare = 0.2
+        else
+            atmos.Enabled = true
+        end
+    else
+        if originalLightingData.ClockTime then
+            Lighting.ClockTime = originalLightingData.ClockTime
+            Lighting.Brightness = originalLightingData.Brightness or 1
+            Lighting.OutdoorAmbient = originalLightingData.OutdoorAmbient or Color3.fromRGB(128,128,128)
+            Lighting.ColorShift_Top = originalLightingData.ColorShift_Top or Color3.fromRGB(0,0,0)
+            Lighting.FogEnd = originalLightingData.FogEnd or 10000
+        end
+        local atmos = Lighting:FindFirstChild("CipsAtmosphere")
+        if atmos then atmos.Enabled = false end
+    end
+end)
+
+-- GRUP FLAME 4: WALLHACK (ESP)
 CreateSection(tabCipikMenu, "WALLHACK")
 
 CreateToggle(tabCipikMenu, "ESP Player", false, function(state)
     EspState = state
     if not state then
-        for _, obj in pairs(EspCache) do
-            if obj then obj:Destroy() end
-        end
+        for _, obj in pairs(EspCache) do if obj then obj:Destroy() end end
         EspCache = {}
     end
 end)
 
-CreateToggle(tabCipikMenu, "ESP Name", false, function(state)
-    EspName = state
-end)
+CreateToggle(tabCipikMenu, "ESP Name", false, function(state) EspName = state end)
+CreateToggle(tabCipikMenu, "ESP Darah", false, function(state) EspHealth = state end)
+CreateToggle(tabCipikMenu, "ESP Jarak", false, function(state) EspDist = state end)
 
-CreateToggle(tabCipikMenu, "ESP Darah", false, function(state)
-    EspHealth = state
-end)
-
-CreateToggle(tabCipikMenu, "ESP Jarak", false, function(state)
-    EspDist = state
-end)
-
--- GRUP FLAME 4: TELEPORT & SPECTATE
+-- GRUP FLAME 5: TELEPORT & SPECTATE
 CreateSection(tabCipikMenu, "TELEPORT & SPECTATE")
 
 local SelectedPlayerName = nil
 local SpectatingState = false
 
--- Dropdown / Selector UI Implementation for Players
 local SelectorFrame = Instance.new("Frame", tabCipikMenu)
 SelectorFrame.Size = UDim2.new(1, -10, 0, 35)
 SelectorFrame.BackgroundTransparency = 1
@@ -392,7 +482,6 @@ SelectorBtn.ZIndex = SelectorFrame.ZIndex + 2
 Round(SelectorBtn, 6)
 Instance.new("UIStroke", SelectorBtn).Color = Theme.Stroke
 
--- Player Dropdown List Holder
 local DropdownListFrame = Instance.new("ScrollingFrame", tabCipikMenu)
 DropdownListFrame.Size = UDim2.new(1, -10, 0, 0)
 DropdownListFrame.BackgroundTransparency = 0
@@ -409,11 +498,8 @@ local dropdownOpen = false
 
 local function RefreshPlayerDropdown()
     for _, child in pairs(DropdownListFrame:GetChildren()) do
-        if child:IsA("TextButton") then
-            child:Destroy()
-        end
+        if child:IsA("TextButton") then child:Destroy() end
     end
-    
     local count = 0
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP then
@@ -450,9 +536,7 @@ SelectorBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-CreateButton(tabCipikMenu, "Refresh List Player", function()
-    RefreshPlayerDropdown()
-end)
+CreateButton(tabCipikMenu, "Refresh List Player", function() RefreshPlayerDropdown() end)
 
 CreateButton(tabCipikMenu, "Select to TP Player", function()
     if SelectedPlayerName then
@@ -468,42 +552,44 @@ end)
 
 CreateToggle(tabCipikMenu, "Select to Spectate", false, function(state)
     SpectatingState = state
-    if not state then
-        Camera.CameraSubject = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") or nil
-    end
+    if not state then Camera.CameraSubject = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid") or nil end
 end)
 
 -- ====================================================
--- TAB 2: Lt2 script (EXTRA SCRIPTS)
+-- TAB 2, 3, 4: OTHER SCRIPTS
 -- ====================================================
 CreateSection(tabLt2Script, "Script Terbang")
-CreateButton(tabLt2Script, "Fly V3", function()
-    loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Fly-V3-50586"))()
-end)
+CreateButton(tabLt2Script, "Fly V3", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Fly-V3-50586"))() end)
 
 CreateSection(tabLt2Script, "Kronhub")
-CreateButton(tabLt2Script, "Kron Hub", function()
-    loadstring(game:HttpGet("https://rawscripts.net/raw/Lumber-Tycoon-2-Kron-Hub-20796"))()
-end)
+CreateButton(tabLt2Script, "Kron Hub", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Lumber-Tycoon-2-Kron-Hub-20796"))() end)
 
 CreateSection(tabLt2Script, "Luaware")
-CreateButton(tabLt2Script, "Dark X V5", function()
-    loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Dark-x-v5-lumber-tycoon-2-103762"))()
-end)
+CreateButton(tabLt2Script, "Dark X V5", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Dark-x-v5-lumber-tycoon-2-103762"))() end)
 
--- ====================================================
--- TAB 3: Muscle Script (MUSCLE LEGENDS HUB)
--- ====================================================
 CreateSection(tabMuscle, "Speedhub X")
-CreateButton(tabMuscle, "Speedhub X", function()
-    loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Speedhub-X-57586"))()
-end)
+CreateButton(tabMuscle, "Speedhub X", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Speedhub-X-57586"))() end)
+
+CreateSection(tabRandom, "Universal Utilities")
+CreateButton(tabRandom, "Infinite Yield", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-inf-yeld-61578"))() end)
+CreateButton(tabRandom, "Xona Hub", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Xona-Hub-54636"))() end)
+CreateButton(tabRandom, "Universal Main", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Universal-39936"))() end)
+CreateButton(tabRandom, "Vfly GUI", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Vfly-Gui-239672"))() end)
+CreateButton(tabRandom, "FE Black Hole", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-FE-black-hole-18879"))() end)
+CreateButton(tabRandom, "Super Ring Parts V6", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Super-ring-Parts-V6-28581"))() end)
+CreateButton(tabRandom, "VexonHub", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-VexonHub-239381"))() end)
+CreateButton(tabRandom, "FE Emotes", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Fe-emotes-136121"))() end)
+
+CreateSection(tabRandom, "Game Specific Scripts")
+CreateButton(tabRandom, "District Violence Script", function() loadstring(game:HttpGet("https://rawscripts.net/raw/CURE-Violence-District-Violence-districk-Script-224476"))() end)
+CreateButton(tabRandom, "Natural Disaster Survival Axe Hub", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Natural-Disaster-Survival-AXE-HUB-SCRIPT-FOR-32149"))() end)
+CreateButton(tabRandom, "Ninja Legends Inf Money & Gems", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Ninja-Legends-inf-money-and-gems-225363"))() end)
+CreateButton(tabRandom, "Ninja Legends Auto Buy Old Pet", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Ninja-Legends-Auto-Buy-Old-P-et-Script-247695"))() end)
 
 -- ====================================================
 -- RUNTIME LOOPS & UPDATERS
 -- ====================================================
 RunService.RenderStepped:Connect(function()
-    -- Particles update
     if ParticlesActive then
         for _, p in pairs(ParticleList) do
             local pos = p.obj.Position; local newX, newY = pos.X.Scale + p.vel.X, pos.Y.Scale + p.vel.Y
@@ -513,29 +599,54 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Scroll canvas resizing
+    -- PENGUNCI WAKTU / SIANG HD AGAR TIDAK DIUBAH GAME
+    if RealisticHDState then
+        Lighting.ClockTime = 14.5
+        Lighting.Brightness = 2.2
+        Lighting.OutdoorAmbient = Color3.fromRGB(130, 140, 160)
+    end
+
     for _, data in pairs(Pages) do 
         if data.Page then data.Page.CanvasSize = UDim2.new(0, 0, 0, data.Layout.AbsoluteContentSize.Y + 20) end 
     end
     SettingsOverlay.CanvasSize = UDim2.new(0, 0, 0, SettingsLayout.AbsoluteContentSize.Y + 20)
     TabHolder.CanvasSize = UDim2.new(0, 0, 0, TabListLayout.AbsoluteContentSize.Y + 10)
 
-    -- Player modifications (Speed, Jump, Noclip)
     local char = LP.Character
     if char then
         local humanoid = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        
         if humanoid then
             if WalkSpeedState then humanoid.WalkSpeed = WalkSpeedVal end
             if JumpHeightState then humanoid.JumpPower = JumpHeightVal end
         end
-        if NoclipState then
+        
+        if NoclipState or AntiBlacklistState then
             for _, part in pairs(char:GetDescendants()) do
                 if part:IsA("BasePart") then part.CanCollide = false end
             end
         end
+
+        if AntiBlacklistState and hrp then
+            if not lockedAnchorCF then
+                lockedAnchorCF = hrp.CFrame
+            else
+                local dist = (hrp.Position - lockedAnchorCF.Position).Magnitude
+                if dist > 20 then
+                    if tick() - lastBypassAttempt >= bypassCooldown then
+                        lastBypassAttempt = tick()
+                        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                        hrp.CFrame = lockedAnchorCF
+                    end
+                end
+            end
+        else
+            lockedAnchorCF = nil
+        end
     end
 
-    -- Fixed Camera Freeze Loop
     if CameraFreezeState and LockedCameraCF then
         Camera.CFrame = LockedCameraCF
     elseif SpectatingState and SelectedPlayerName then
@@ -545,7 +656,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- ESP Loop Implementation (Highlight & Info)
     if EspState then
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -553,7 +663,6 @@ RunService.RenderStepped:Connect(function()
                 local hrp = pChar.HumanoidRootPart
                 local hum = pChar:FindFirstChildOfClass("Humanoid")
                 
-                -- Highlight Check
                 local highlight = pChar:FindFirstChild("CipsHighlight")
                 if not highlight then
                     highlight = Instance.new("Highlight")
@@ -565,7 +674,6 @@ RunService.RenderStepped:Connect(function()
                     highlight.Parent = pChar
                 end
                 
-                -- Billboards / Info tags
                 local billboard = pChar:FindFirstChild("CipsBillboard")
                 if (EspName or EspHealth or EspDist) then
                     if not billboard then
@@ -620,4 +728,4 @@ Pages["CipikMenu"].Button.BackgroundTransparency = 0.5
 Pages["CipikMenu"].Button.TextColor3 = Theme.Accent
 Pages["CipikMenu"].Page.Visible = true
 
-print("Ciphub V99: CipikMenu, Lt2 script & Muscle Script Loaded Successfully! 🌊")
+print("Ciphub V99: Fixed HD Day Lighting & All Tabs Loaded Successfully! 🌊")
